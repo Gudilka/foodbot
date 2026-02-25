@@ -1,21 +1,21 @@
 BEGIN;
 
 INSERT INTO dietary_restrictions (code, name) VALUES
-  ('lactose_free', 'Lactose free'),
-  ('gluten_free', 'Gluten free'),
-  ('nut_free', 'Nut free'),
-  ('vegan', 'Vegan'),
-  ('vegetarian', 'Vegetarian'),
-  ('halal', 'Halal')
+  ('lactose_free', 'Без лактозы'),
+  ('gluten_free', 'Без глютена'),
+  ('nut_free', 'Без орехов'),
+  ('vegan', 'Веганское'),
+  ('vegetarian', 'Вегетарианское'),
+  ('halal', 'Халяль')
 ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO cuisines (code, name) VALUES
-  ('russian', 'Russian'),
-  ('italian', 'Italian'),
-  ('asian', 'Asian'),
-  ('georgian', 'Georgian'),
-  ('mediterranean', 'Mediterranean'),
-  ('mexican', 'Mexican')
+  ('russian', 'Русская'),
+  ('italian', 'Итальянская'),
+  ('asian', 'Азиатская'),
+  ('georgian', 'Грузинская'),
+  ('mediterranean', 'Средиземноморская'),
+  ('mexican', 'Мексиканская')
 ON CONFLICT (code) DO NOTHING;
 
 INSERT INTO expense_categories (code, name) VALUES

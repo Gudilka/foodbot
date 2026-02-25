@@ -6,15 +6,10 @@ from bot.fsm.states import RegistrationStates
 
 ORDERED_STEPS: list[State] = [
     RegistrationStates.budget,
+    RegistrationStates.diet_type,
+    RegistrationStates.nutrition_goal,
     RegistrationStates.household_size,
     RegistrationStates.dietary_restrictions,
-    RegistrationStates.cooking_skill,
-    RegistrationStates.max_cook_time,
-    RegistrationStates.goals_kbju,
-    RegistrationStates.exclude_fast_food,
-    RegistrationStates.cuisine_preferences,
-    RegistrationStates.reminder_settings,
-    RegistrationStates.notes,
     RegistrationStates.confirm,
 ]
 
@@ -54,9 +49,9 @@ def resolve_state(state_name: str | None) -> State:
 
 def progress_caption(current: State | None) -> str:
     if current is None:
-        return 'Шаг 1/11'
+        return f"Шаг 1/{len(ORDERED_STEPS)}"
     try:
         idx = ORDERED_STEPS.index(current)
     except ValueError:
         idx = 0
-    return f'Шаг {idx + 1}/{len(ORDERED_STEPS)}'
+    return f"Шаг {idx + 1}/{len(ORDERED_STEPS)}"

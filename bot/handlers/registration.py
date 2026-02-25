@@ -11,13 +11,18 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.fsm.flow import next_state, prev_state, progress_caption, resolve_state
 from bot.fsm.states import RegistrationStates
-from bot.keyboards import bool_keyboard, multiselect_keyboard, nav_keyboard, profile_keyboard
+from bot.keyboards import multiselect_keyboard, nav_keyboard, profile_keyboard, single_select_keyboard
 from bot.services import RegistrationDraft, RegistrationService
-from bot.utils import parse_decimal_in_range, parse_int_in_range, parse_optional_decimal
+from bot.services.registration_service import DIET_TYPE_LABELS, NUTRITION_GOAL_LABELS, ReferenceOption
+from bot.utils import parse_decimal_in_range, parse_int_in_range
 
 DEFAULTS: dict[str, Any] = {
     "weekly_budget_rub": "3000",
+    "diet_type": "omnivore",
+    "nutrition_goal": "maintenance",
     "household_size": 1,
+    "dietary_restriction_codes": [],
+    # Legacy fields kept in payload for compatibility.
     "cooking_skill": 3,
     "max_cook_time_min": 60,
     "goal_kcal": None,
@@ -25,13 +30,29 @@ DEFAULTS: dict[str, Any] = {
     "goal_fat_g": None,
     "goal_carb_g": None,
     "exclude_fast_food": True,
-    "dietary_restriction_codes": [],
+    "notes": None,
     "cuisine_codes": [],
     "sunday_plan_reminder_enabled": True,
     "reminder_hour_local": 18,
-    "notes": None,
     "mode": "create",
 }
+
+DIET_TYPE_OPTIONS = [
+    ReferenceOption(code="omnivore", name="Всеядное"),
+    ReferenceOption(code="vegetarian", name="Вегетарианское"),
+    ReferenceOption(code="vegan", name="Веганское"),
+    ReferenceOption(code="pescatarian", name="Пескетарианское"),
+    ReferenceOption(code="other", name="Другое"),
+]
+
+NUTRITION_GOAL_OPTIONS = [
+    ReferenceOption(code="weight_loss", name="Снижение веса"),
+    ReferenceOption(code="maintenance", name="Поддержание формы"),
+    ReferenceOption(code="muscle_gain", name="Набор мышечной массы"),
+    ReferenceOption(code="health_support", name="Поддержка здоровья"),
+    ReferenceOption(code="medical_diet", name="Лечебная диета"),
+    ReferenceOption(code="other", name="Другое"),
+]
 
 
 def create_registration_router(service: RegistrationService) -> Router:
@@ -65,58 +86,48 @@ def create_registration_router(service: RegistrationService) -> Router:
         markup = nav_keyboard()
         if step == RegistrationStates.budget:
             text = f"{prefix}\nВведите бюджет на неделю в ₽ (500..100000)."
+        elif step == RegistrationStates.diet_type:
+            text = f"{prefix}\nВыберите тип питания."
+            markup = single_select_keyboard(
+                prefix="reg:diet_type",
+                options=DIET_TYPE_OPTIONS,
+                selected_code=data.get("diet_type"),
+            )
+        elif step == RegistrationStates.nutrition_goal:
+            text = f"{prefix}\nВыберите цель питания."
+            markup = single_select_keyboard(
+                prefix="reg:nutrition_goal",
+                options=NUTRITION_GOAL_OPTIONS,
+                selected_code=data.get("nutrition_goal"),
+            )
         elif step == RegistrationStates.household_size:
             text = f"{prefix}\nСколько человек в семье? (1..10)"
         elif step == RegistrationStates.dietary_restrictions:
             selected = set(data.get("dietary_restriction_codes", []))
             options = await service.list_restrictions()
-            text = f"{prefix}\nВыберите ограничения (мультивыбор), затем Done."
+            text = f"{prefix}\nВыберите аллергии и ограничения (мультивыбор), затем «Готово»."
             markup = multiselect_keyboard(prefix="reg:restriction", options=options, selected_codes=selected)
-        elif step == RegistrationStates.cooking_skill:
-            text = f"{prefix}\nУровень готовки (1..5)."
-        elif step == RegistrationStates.max_cook_time:
-            text = f"{prefix}\nМаксимум времени на рецепт в минутах (10..240)."
-        elif step == RegistrationStates.goals_kbju:
-            text = (
-                f"{prefix}\nВведите 4 значения через пробел: `ккал белки жиры углеводы`.\n"
-                "Для пропуска конкретного значения укажите `-`. Пример: `2200 120 70 200`"
-            )
-        elif step == RegistrationStates.exclude_fast_food:
-            text = f"{prefix}\nИсключать фастфуд?"
-            markup = bool_keyboard(prefix="reg:exclude")
-        elif step == RegistrationStates.cuisine_preferences:
-            selected = set(data.get("cuisine_codes", []))
-            options = await service.list_cuisines()
-            text = f"{prefix}\nВыберите предпочитаемые кухни (мультивыбор), затем Done."
-            markup = multiselect_keyboard(prefix="reg:cuisine", options=options, selected_codes=selected)
-        elif step == RegistrationStates.reminder_settings:
-            phase = data.get("reminder_phase", "enabled")
-            if phase == "enabled":
-                text = f"{prefix}\nВключить воскресное напоминание о плане?"
-                markup = bool_keyboard(prefix="reg:reminder_enabled")
-            else:
-                text = f"{prefix}\nВведите час напоминания (0..23)."
-        elif step == RegistrationStates.notes:
-            text = f"{prefix}\nКомментарий к профилю (или `-`, чтобы пропустить)."
         elif step == RegistrationStates.confirm:
             try:
                 draft = RegistrationDraft(**{**DEFAULTS, **data})
+                selected_restrictions = [service.restriction_label(code) for code in draft.dietary_restriction_codes]
                 text = (
                     f"{prefix}\nПроверьте данные:\n"
                     f"- Бюджет: {draft.weekly_budget_rub} ₽\n"
-                    f"- Семья: {draft.household_size}\n"
-                    f"- Навык: {draft.cooking_skill}\n"
-                    f"- Время: {draft.max_cook_time_min} мин\n"
-                    f"- Ограничения: {', '.join(draft.dietary_restriction_codes) or 'нет'}\n"
-                    f"- Кухни: {', '.join(draft.cuisine_codes) or 'не выбраны'}\n"
-                    f"- Напоминание: {'вкл' if draft.sunday_plan_reminder_enabled else 'выкл'} {draft.reminder_hour_local}:00\n\n"
-                    "Нажмите ✅ Done для сохранения."
+                    f"- Тип питания: {DIET_TYPE_LABELS.get(draft.diet_type or '', 'Не выбрано')}\n"
+                    f"- Цель питания: {NUTRITION_GOAL_LABELS.get(draft.nutrition_goal or '', 'Не выбрано')}\n"
+                    f"- Количество человек: {draft.household_size}\n"
+                    f"- Аллергии и ограничения: {', '.join(selected_restrictions) or 'нет'}\n\n"
+                    "Нажмите «✅ Готово», чтобы сохранить."
                 )
             except Exception:
-                text = f"{prefix}\nОшибка в данных анкеты. Вернитесь назад и исправьте поля."
+                text = f"{prefix}\nОшибка в данных анкеты. Вернитесь назад и проверьте шаги."
             markup = nav_keyboard(allow_skip=False, include_done=True)
 
         if isinstance(target, CallbackQuery):
+            if target.message is None:
+                await target.answer()
+                return
             await target.message.answer(text, reply_markup=markup)
             await target.answer()
         else:
@@ -152,7 +163,7 @@ def create_registration_router(service: RegistrationService) -> Router:
     async def _handle_cancel(message: Message, state: FSMContext) -> None:
         await service.cancel_onboarding(telegram_user_id=message.from_user.id)
         await state.clear()
-        await message.answer("Анкета отменена. Используйте /start для начала.")
+        await message.answer("Анкета отменена. Используйте /start, чтобы начать заново.")
 
     @router.message(Command("start"))
     async def cmd_start(message: Message, state: FSMContext) -> None:
@@ -160,12 +171,12 @@ def create_registration_router(service: RegistrationService) -> Router:
             return
         _, is_new = await service.ensure_user(message.from_user)
         if is_new:
-            await message.answer("Привет! Настроим профиль за 1-2 минуты.")
+            await message.answer("Привет! Настроим профиль. Это займет около минуты.")
             await _start_onboarding(message, state, mode="create")
             return
         profile = await service.get_profile(telegram_user_id=message.from_user.id)
         if profile is None:
-            await message.answer("Профиль не заполнен. Запустим анкету.")
+            await message.answer("Профиль пока не заполнен. Запускаю анкету.")
             await _start_onboarding(message, state, mode="create")
             return
         await state.clear()
@@ -223,29 +234,14 @@ def create_registration_router(service: RegistrationService) -> Router:
     def _apply_skip(state_name: str, data: dict[str, Any]) -> dict[str, Any]:
         if state_name.endswith(":budget"):
             data["weekly_budget_rub"] = DEFAULTS["weekly_budget_rub"]
+        elif state_name.endswith(":diet_type"):
+            data["diet_type"] = DEFAULTS["diet_type"]
+        elif state_name.endswith(":nutrition_goal"):
+            data["nutrition_goal"] = DEFAULTS["nutrition_goal"]
         elif state_name.endswith(":household_size"):
             data["household_size"] = DEFAULTS["household_size"]
         elif state_name.endswith(":dietary_restrictions"):
             data["dietary_restriction_codes"] = []
-        elif state_name.endswith(":cooking_skill"):
-            data["cooking_skill"] = DEFAULTS["cooking_skill"]
-        elif state_name.endswith(":max_cook_time"):
-            data["max_cook_time_min"] = DEFAULTS["max_cook_time_min"]
-        elif state_name.endswith(":goals_kbju"):
-            data["goal_kcal"] = None
-            data["goal_protein_g"] = None
-            data["goal_fat_g"] = None
-            data["goal_carb_g"] = None
-        elif state_name.endswith(":exclude_fast_food"):
-            data["exclude_fast_food"] = DEFAULTS["exclude_fast_food"]
-        elif state_name.endswith(":cuisine_preferences"):
-            data["cuisine_codes"] = []
-        elif state_name.endswith(":reminder_settings"):
-            data["sunday_plan_reminder_enabled"] = DEFAULTS["sunday_plan_reminder_enabled"]
-            data["reminder_hour_local"] = DEFAULTS["reminder_hour_local"]
-            data["reminder_phase"] = "enabled"
-        elif state_name.endswith(":notes"):
-            data["notes"] = None
         return data
 
     @router.callback_query(F.data == "reg:action:skip")
@@ -267,21 +263,9 @@ def create_registration_router(service: RegistrationService) -> Router:
         if current_state is None:
             await callback.answer()
             return
-        if current_state.endswith(":dietary_restrictions") or current_state.endswith(":cuisine_preferences"):
+        if current_state.endswith(":dietary_restrictions"):
             await service.log_step_completed(telegram_user_id=callback.from_user.id, step_name=current_state)
             await _move_to_next(callback, state, resolve_state(current_state))
-            return
-        if current_state.endswith(":confirm"):
-            data = await state.get_data()
-            try:
-                draft = RegistrationDraft(**{**DEFAULTS, **data})
-            except Exception:
-                await callback.answer("Данные анкеты некорректны")
-                return
-            await service.save_profile(draft=draft, mode=data.get("mode", "create"))
-            await state.clear()
-            await callback.message.answer("Профиль сохранён. Используйте /profile для просмотра.")
-            await callback.answer()
             return
         await callback.answer()
 
@@ -292,7 +276,7 @@ def create_registration_router(service: RegistrationService) -> Router:
             return
         current_state = await state.get_state()
         if current_state is None or not current_state.endswith(":confirm"):
-            await callback.answer("Сейчас нельзя подтвердить")
+            await callback.answer("Сейчас подтверждение недоступно")
             return
         data = await state.get_data()
         try:
@@ -302,7 +286,7 @@ def create_registration_router(service: RegistrationService) -> Router:
             return
         await service.save_profile(draft=draft, mode=data.get("mode", "create"))
         await state.clear()
-        await callback.message.answer("Профиль сохранён. Используйте /profile для просмотра.")
+        await callback.message.answer("Профиль сохранен. Используйте /profile для просмотра.")
         await callback.answer()
 
     @router.callback_query(F.data.startswith("reg:step:"))
@@ -311,19 +295,7 @@ def create_registration_router(service: RegistrationService) -> Router:
             await callback.answer()
             return
         step_name = callback.data.split(":")[-1]
-        allowed = {
-            "budget",
-            "household_size",
-            "dietary_restrictions",
-            "cooking_skill",
-            "max_cook_time",
-            "goals_kbju",
-            "exclude_fast_food",
-            "cuisine_preferences",
-            "reminder_settings",
-            "notes",
-            "confirm",
-        }
+        allowed = {"budget", "diet_type", "nutrition_goal", "household_size", "dietary_restrictions", "confirm"}
         if step_name not in allowed:
             await callback.answer("Неизвестный шаг")
             return
@@ -331,6 +303,30 @@ def create_registration_router(service: RegistrationService) -> Router:
         target_state = resolve_state(state_name)
         await state.set_state(target_state)
         await _send_step_prompt(callback, state, target_state)
+
+    @router.callback_query(F.data.startswith("reg:diet_type:"))
+    async def cb_diet_type(callback: CallbackQuery, state: FSMContext) -> None:
+        if callback.message is None:
+            await callback.answer()
+            return
+        data = await _ensure_draft_context(callback.message, state)
+        selected = callback.data.split(":")[-1]
+        data["diet_type"] = selected
+        await state.set_data(data)
+        await service.log_step_completed(telegram_user_id=callback.from_user.id, step_name="diet_type")
+        await _move_to_next(callback, state, RegistrationStates.diet_type)
+
+    @router.callback_query(F.data.startswith("reg:nutrition_goal:"))
+    async def cb_nutrition_goal(callback: CallbackQuery, state: FSMContext) -> None:
+        if callback.message is None:
+            await callback.answer()
+            return
+        data = await _ensure_draft_context(callback.message, state)
+        selected = callback.data.split(":")[-1]
+        data["nutrition_goal"] = selected
+        await state.set_data(data)
+        await service.log_step_completed(telegram_user_id=callback.from_user.id, step_name="nutrition_goal")
+        await _move_to_next(callback, state, RegistrationStates.nutrition_goal)
 
     @router.callback_query(F.data.startswith("reg:restriction:"))
     async def cb_toggle_restriction(callback: CallbackQuery, state: FSMContext) -> None:
@@ -344,47 +340,9 @@ def create_registration_router(service: RegistrationService) -> Router:
             selected.remove(code)
         else:
             selected.add(code)
-        data["dietary_restriction_codes"] = list(selected)
+        data["dietary_restriction_codes"] = sorted(selected)
         await state.set_data(data)
         await _send_step_prompt(callback, state, RegistrationStates.dietary_restrictions)
-
-    @router.callback_query(F.data.startswith("reg:cuisine:"))
-    async def cb_toggle_cuisine(callback: CallbackQuery, state: FSMContext) -> None:
-        if callback.message is None:
-            await callback.answer()
-            return
-        data = await _ensure_draft_context(callback.message, state)
-        code = callback.data.split(":")[-1]
-        selected = set(data.get("cuisine_codes", []))
-        if code in selected:
-            selected.remove(code)
-        else:
-            selected.add(code)
-        data["cuisine_codes"] = list(selected)
-        await state.set_data(data)
-        await _send_step_prompt(callback, state, RegistrationStates.cuisine_preferences)
-
-    @router.callback_query(F.data.startswith("reg:exclude:"))
-    async def cb_exclude_fast_food(callback: CallbackQuery, state: FSMContext) -> None:
-        if callback.message is None:
-            await callback.answer()
-            return
-        data = await _ensure_draft_context(callback.message, state)
-        data["exclude_fast_food"] = callback.data.endswith(":yes")
-        await state.set_data(data)
-        await service.log_step_completed(telegram_user_id=callback.from_user.id, step_name="exclude_fast_food")
-        await _move_to_next(callback, state, RegistrationStates.exclude_fast_food)
-
-    @router.callback_query(F.data.startswith("reg:reminder_enabled:"))
-    async def cb_reminder_enabled(callback: CallbackQuery, state: FSMContext) -> None:
-        if callback.message is None:
-            await callback.answer()
-            return
-        data = await _ensure_draft_context(callback.message, state)
-        data["sunday_plan_reminder_enabled"] = callback.data.endswith(":yes")
-        data["reminder_phase"] = "hour"
-        await state.set_data(data)
-        await _send_step_prompt(callback, state, RegistrationStates.reminder_settings)
 
     async def _handle_text_step(message: Message, state: FSMContext, current_state: str) -> bool:
         data = await _ensure_draft_context(message, state)
@@ -400,38 +358,11 @@ def create_registration_router(service: RegistrationService) -> Router:
                 )
             elif current_state.endswith(":household_size"):
                 data["household_size"] = parse_int_in_range(
-                    message.text, min_value=1, max_value=10, field_name="Размер семьи"
+                    message.text, min_value=1, max_value=10, field_name="Количество человек"
                 )
-            elif current_state.endswith(":cooking_skill"):
-                data["cooking_skill"] = parse_int_in_range(
-                    message.text, min_value=1, max_value=5, field_name="Уровень готовки"
-                )
-            elif current_state.endswith(":max_cook_time"):
-                data["max_cook_time_min"] = parse_int_in_range(
-                    message.text, min_value=10, max_value=240, field_name="Время готовки"
-                )
-            elif current_state.endswith(":goals_kbju"):
-                parts = message.text.strip().split()
-                if len(parts) != 4:
-                    raise ValueError("Введите 4 значения: ккал белки жиры углеводы")
-                data["goal_kcal"] = parse_optional_decimal(parts[0], min_value=Decimal("0"), field_name="Ккал")
-                data["goal_protein_g"] = parse_optional_decimal(parts[1], min_value=Decimal("0"), field_name="Белки")
-                data["goal_fat_g"] = parse_optional_decimal(parts[2], min_value=Decimal("0"), field_name="Жиры")
-                data["goal_carb_g"] = parse_optional_decimal(parts[3], min_value=Decimal("0"), field_name="Углеводы")
-            elif current_state.endswith(":reminder_settings"):
-                phase = data.get("reminder_phase", "enabled")
-                if phase != "hour":
-                    await message.answer("Сначала выберите включение напоминаний кнопками.")
-                    return True
-                data["reminder_hour_local"] = parse_int_in_range(
-                    message.text, min_value=0, max_value=23, field_name="Час напоминания"
-                )
-                data["reminder_phase"] = "enabled"
-            elif current_state.endswith(":notes"):
-                note = message.text.strip()
-                data["notes"] = None if note == "-" else note
             else:
-                return False
+                await message.answer("На этом шаге используйте кнопки под сообщением.")
+                return True
         except ValueError as exc:
             await message.answer(f"Ошибка: {exc}")
             await _send_step_prompt(message, state, resolve_state(current_state))

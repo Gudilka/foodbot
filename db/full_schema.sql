@@ -43,6 +43,8 @@ CREATE TABLE user_profiles (
   currency CHAR(3) NOT NULL DEFAULT 'RUB',
   household_size SMALLINT NOT NULL DEFAULT 1 CHECK (household_size > 0),
   weekly_budget_rub NUMERIC(12,2) NOT NULL CHECK (weekly_budget_rub >= 0),
+  diet_type TEXT,
+  nutrition_goal TEXT,
   monthly_budget_rub NUMERIC(12,2) CHECK (monthly_budget_rub >= 0),
   cooking_skill SMALLINT CHECK (cooking_skill BETWEEN 1 AND 5),
   max_cook_time_min INTEGER CHECK (max_cook_time_min > 0),

@@ -4,6 +4,9 @@ from decimal import Decimal
 
 from pydantic import BaseModel, Field, field_validator
 
+DIET_TYPES = {"omnivore", "vegetarian", "vegan", "pescatarian", "other"}
+NUTRITION_GOALS = {"weight_loss", "maintenance", "muscle_gain", "health_support", "medical_diet", "other"}
+
 
 class RegistrationDraft(BaseModel):
     telegram_user_id: int
@@ -14,7 +17,11 @@ class RegistrationDraft(BaseModel):
     timezone: str = "Europe/Moscow"
 
     weekly_budget_rub: Decimal = Field(ge=Decimal("500"), le=Decimal("100000"))
+    diet_type: str | None = None
+    nutrition_goal: str | None = None
     household_size: int = Field(default=1, ge=1, le=10)
+
+    # Legacy fields kept for compatibility but not collected in onboarding.
     cooking_skill: int = Field(default=3, ge=1, le=5)
     max_cook_time_min: int = Field(default=60, ge=10, le=240)
     goal_kcal: Decimal | None = Field(default=None, ge=Decimal("0"))
@@ -25,6 +32,7 @@ class RegistrationDraft(BaseModel):
     notes: str | None = None
 
     dietary_restriction_codes: list[str] = Field(default_factory=list)
+    # Legacy field kept for compatibility.
     cuisine_codes: list[str] = Field(default_factory=list)
 
     sunday_plan_reminder_enabled: bool = True
@@ -50,10 +58,32 @@ class RegistrationDraft(BaseModel):
                 ordered.append(normalized)
         return ordered
 
+    @field_validator("diet_type")
+    @classmethod
+    def validate_diet_type(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if normalized not in DIET_TYPES:
+            raise ValueError("diet_type has unsupported value")
+        return normalized
+
+    @field_validator("nutrition_goal")
+    @classmethod
+    def validate_nutrition_goal(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if normalized not in NUTRITION_GOALS:
+            raise ValueError("nutrition_goal has unsupported value")
+        return normalized
+
 
 class ProfileView(BaseModel):
     telegram_user_id: int
     weekly_budget_rub: Decimal
+    diet_type: str | None
+    nutrition_goal: str | None
     household_size: int
     cooking_skill: int | None
     max_cook_time_min: int | None

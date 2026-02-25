@@ -40,22 +40,29 @@ async def test_new_user_onboarding_and_existing_user_profile_edit(service: Regis
         last_name=None,
         language_code="ru",
         weekly_budget_rub=Decimal("3200"),
+        diet_type="pescatarian",
+        nutrition_goal="health_support",
         household_size=1,
-        cooking_skill=3,
-        max_cook_time_min=55,
-        dietary_restriction_codes=["vegan"],
-        cuisine_codes=["asian"],
-        reminder_hour_local=18,
+        dietary_restriction_codes=["gluten_free"],
     )
     await service.save_profile(draft=first_draft, mode="create")
     profile = await service.get_profile(telegram_user_id=telegram_id)
     assert profile is not None
     assert profile.weekly_budget_rub == Decimal("3200")
-    assert profile.cuisine_codes == ["asian"]
+    assert profile.diet_type == "pescatarian"
+    assert profile.nutrition_goal == "health_support"
 
-    second_draft = first_draft.model_copy(update={"weekly_budget_rub": Decimal("4100"), "cuisine_codes": ["russian"]})
+    second_draft = first_draft.model_copy(
+        update={
+            "weekly_budget_rub": Decimal("4100"),
+            "diet_type": "omnivore",
+            "nutrition_goal": "maintenance",
+            "dietary_restriction_codes": ["lactose_free"],
+        }
+    )
     await service.save_profile(draft=second_draft, mode="update")
     profile_after = await service.get_profile(telegram_user_id=telegram_id)
     assert profile_after is not None
     assert profile_after.weekly_budget_rub == Decimal("4100")
-    assert profile_after.cuisine_codes == ["russian"]
+    assert profile_after.diet_type == "omnivore"
+    assert profile_after.nutrition_goal == "maintenance"

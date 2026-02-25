@@ -26,6 +26,8 @@ class ProfileRepository:
             .values(
                 user_id=user_id,
                 weekly_budget_rub=draft.weekly_budget_rub,
+                diet_type=draft.diet_type,
+                nutrition_goal=draft.nutrition_goal,
                 household_size=draft.household_size,
                 cooking_skill=draft.cooking_skill,
                 max_cook_time_min=draft.max_cook_time_min,
@@ -40,6 +42,8 @@ class ProfileRepository:
                 index_elements=[UserProfile.user_id],
                 set_={
                     "weekly_budget_rub": draft.weekly_budget_rub,
+                    "diet_type": draft.diet_type,
+                    "nutrition_goal": draft.nutrition_goal,
                     "household_size": draft.household_size,
                     "cooking_skill": draft.cooking_skill,
                     "max_cook_time_min": draft.max_cook_time_min,
@@ -111,6 +115,8 @@ class ProfileRepository:
                   u.id AS user_id,
                   u.telegram_user_id,
                   p.weekly_budget_rub,
+                  p.diet_type,
+                  p.nutrition_goal,
                   p.household_size,
                   p.cooking_skill,
                   p.max_cook_time_min,
@@ -161,6 +167,8 @@ class ProfileRepository:
         return ProfileView(
             telegram_user_id=base_row.telegram_user_id,
             weekly_budget_rub=_to_decimal(base_row.weekly_budget_rub) or Decimal("0"),
+            diet_type=base_row.diet_type,
+            nutrition_goal=base_row.nutrition_goal,
             household_size=base_row.household_size,
             cooking_skill=base_row.cooking_skill,
             max_cook_time_min=base_row.max_cook_time_min,

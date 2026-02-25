@@ -48,6 +48,8 @@ class UserProfile(Base):
     currency: Mapped[str] = mapped_column(Text, nullable=False, default="RUB")
     household_size: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
     weekly_budget_rub: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    diet_type: Mapped[str | None] = mapped_column(Text)
+    nutrition_goal: Mapped[str | None] = mapped_column(Text)
     monthly_budget_rub: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     cooking_skill: Mapped[int | None] = mapped_column(SmallInteger)
     max_cook_time_min: Mapped[int | None] = mapped_column(Integer)

@@ -1,46 +1,52 @@
 # FoodBOT
 
-Telegram-first bot for registration and profile onboarding.
+Telegram-бот для регистрации и ведения профиля питания.
 
-## Quick start
+## Быстрый запуск
 
-1. Install dependencies:
+1. Установите зависимости:
 ```bash
-pip install -e ".[dev]"
+python3 -m pip install -e ".[dev]"
 ```
-2. Set environment variables in `.env`:
+2. Проверьте переменные в `.env`:
 ```bash
 BOT_TOKEN=...
 DATABASE_URL=sqlite+aiosqlite:///./foodbot.db
 APP_ENV=local
 LOG_LEVEL=INFO
 ```
-3. Run bot:
+3. Запустите бота:
 ```bash
 python3 -m bot.main
 ```
 
-On first start the bot auto-creates required tables and seeds reference data.
+При первом запуске бот сам создаст нужные таблицы и заполнит справочники.
 
-## PostgreSQL mode (optional)
+## Режим PostgreSQL (опционально)
 
-If you want PostgreSQL instead of SQLite:
+Если нужен PostgreSQL вместо SQLite:
 
-1. Set `DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/dbname`.
-2. Apply migrations:
+1. Установите `DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/dbname`.
+2. Примените миграции:
 ```bash
 alembic upgrade head
 ```
 
-## Implemented v1 features
+## Реализовано в v1
 
-- `/start`: new user onboarding or existing profile view.
-- `/profile`: current profile summary.
-- `/edit_profile`: full profile re-onboarding in update mode.
-- `/cancel`: safe cancel of onboarding.
-- DB-based FSM storage (`bot_fsm_states`) for restart-safe wizard state.
+- `/start`: онбординг нового пользователя или показ профиля.
+- `/profile`: просмотр текущего профиля.
+- `/edit_profile`: повторное прохождение короткой анкеты.
+- `/cancel`: безопасная отмена анкеты.
+- Хранение состояния анкеты в БД (`bot_fsm_states`), без потери при рестарте.
+- Онбординг сокращён до 5 шагов + подтверждение:
+  - бюджет;
+  - тип питания;
+  - цель питания;
+  - количество человек;
+  - аллергии и ограничения.
 
-## Testing
+## Тесты
 
 ```bash
 pytest -q

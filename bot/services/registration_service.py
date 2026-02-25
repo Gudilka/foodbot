@@ -6,15 +6,36 @@ from decimal import Decimal
 from aiogram.types import User as TgUser
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from bot.repositories import (
-    CuisinesRepository,
-    EventLogRepository,
-    NotificationSettingsRepository,
-    ProfileRepository,
-    RestrictionsRepository,
-    UserRepository,
-)
+from bot.repositories import EventLogRepository, NotificationSettingsRepository, ProfileRepository, RestrictionsRepository, UserRepository
 from bot.services.dto import ProfileView, RegistrationDraft
+
+DIET_TYPE_LABELS: dict[str, str] = {
+    "omnivore": "Всеядное",
+    "vegetarian": "Вегетарианское",
+    "vegan": "Веганское",
+    "pescatarian": "Пескетарианское",
+    "other": "Другое",
+}
+
+NUTRITION_GOAL_LABELS: dict[str, str] = {
+    "weight_loss": "Снижение веса",
+    "maintenance": "Поддержание формы",
+    "muscle_gain": "Набор мышечной массы",
+    "health_support": "Поддержка здоровья",
+    "medical_diet": "Лечебная диета",
+    "other": "Другое",
+}
+
+RESTRICTION_LABELS: dict[str, str] = {
+    "lactose_free": "Без лактозы",
+    "gluten_free": "Без глютена",
+    "nut_free": "Без орехов",
+    "halal": "Халяль",
+    "vegetarian": "Вегетарианское",
+    "vegan": "Веганское",
+}
+
+RESTRICTION_CODES_EXCLUDED_FROM_STEP = {"vegan", "vegetarian"}
 
 
 @dataclass(frozen=True)
@@ -115,6 +136,8 @@ class RegistrationService:
             last_name=tg_user.last_name,
             language_code=tg_user.language_code or "ru",
             weekly_budget_rub=profile.weekly_budget_rub,
+            diet_type=profile.diet_type,
+            nutrition_goal=profile.nutrition_goal,
             household_size=profile.household_size,
             cooking_skill=profile.cooking_skill or 3,
             max_cook_time_min=profile.max_cook_time_min or 60,
@@ -134,37 +157,41 @@ class RegistrationService:
         async with self._session_factory() as session:
             repo = RestrictionsRepository(session)
             items = await repo.list_restrictions()
-            return [ReferenceOption(code=i.code, name=i.name) for i in items]
-
-    async def list_cuisines(self) -> list[ReferenceOption]:
-        async with self._session_factory() as session:
-            repo = CuisinesRepository(session)
-            items = await repo.list_cuisines()
-            return [ReferenceOption(code=i.code, name=i.name) for i in items]
+            options = [ReferenceOption(code=i.code, name=i.name) for i in items]
+            return self.filter_restriction_options(options)
 
     @staticmethod
-    def format_profile(profile: ProfileView) -> str:
-        goals = " / ".join(
-            [
-                f"Ккал: {profile.goal_kcal}" if profile.goal_kcal is not None else "Ккал: -",
-                f"Б: {profile.goal_protein_g}" if profile.goal_protein_g is not None else "Б: -",
-                f"Ж: {profile.goal_fat_g}" if profile.goal_fat_g is not None else "Ж: -",
-                f"У: {profile.goal_carb_g}" if profile.goal_carb_g is not None else "У: -",
-            ]
+    def filter_restriction_options(options: list[ReferenceOption]) -> list[ReferenceOption]:
+        return [o for o in options if o.code not in RESTRICTION_CODES_EXCLUDED_FROM_STEP]
+
+    @staticmethod
+    def diet_type_label(code: str | None) -> str:
+        if not code:
+            return "Не выбрано"
+        return DIET_TYPE_LABELS.get(code, code)
+
+    @staticmethod
+    def nutrition_goal_label(code: str | None) -> str:
+        if not code:
+            return "Не выбрано"
+        return NUTRITION_GOAL_LABELS.get(code, code)
+
+    @staticmethod
+    def restriction_label(code: str) -> str:
+        return RESTRICTION_LABELS.get(code, code)
+
+    @classmethod
+    def format_profile(cls, profile: ProfileView) -> str:
+        restrictions = (
+            ", ".join(cls.restriction_label(code) for code in profile.dietary_restriction_codes)
+            if profile.dietary_restriction_codes
+            else "нет"
         )
-        restrictions = ", ".join(profile.dietary_restriction_codes) if profile.dietary_restriction_codes else "нет"
-        cuisines = ", ".join(profile.cuisine_codes) if profile.cuisine_codes else "не выбраны"
         return (
             "Ваш профиль:\n"
-            f"- Бюджет/неделя: {Decimal(profile.weekly_budget_rub)} ₽\n"
-            f"- Семья: {profile.household_size}\n"
-            f"- Навык: {profile.cooking_skill or '-'}\n"
-            f"- Макс. время готовки: {profile.max_cook_time_min or '-'} мин\n"
-            f"- Цели КБЖУ: {goals}\n"
-            f"- Исключать фастфуд: {'да' if profile.exclude_fast_food else 'нет'}\n"
-            f"- Ограничения: {restrictions}\n"
-            f"- Кухни: {cuisines}\n"
-            f"- Напоминание в воскресенье: {'вкл' if profile.sunday_plan_reminder_enabled else 'выкл'}\n"
-            f"- Час напоминания: {profile.reminder_hour_local}:00\n"
-            f"- Заметка: {profile.notes or '-'}"
+            f"- Бюджет на неделю: {Decimal(profile.weekly_budget_rub)} ₽\n"
+            f"- Тип питания: {cls.diet_type_label(profile.diet_type)}\n"
+            f"- Цель питания: {cls.nutrition_goal_label(profile.nutrition_goal)}\n"
+            f"- Количество человек: {profile.household_size}\n"
+            f"- Аллергии и ограничения: {restrictions}"
         )
