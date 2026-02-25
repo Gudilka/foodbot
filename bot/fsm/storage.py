@@ -6,9 +6,9 @@ from typing import Any
 from aiogram.fsm.state import State
 from aiogram.fsm.storage.base import BaseStorage, StateType, StorageKey
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from bot.db.dml import upsert_insert
 from bot.db.models import BotFSMState
 
 
@@ -20,7 +20,7 @@ def _state_to_str(state: StateType = None) -> str | None:
     return str(state)
 
 
-class PostgresFSMStorage(BaseStorage):
+class DatabaseFSMStorage(BaseStorage):
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
@@ -31,7 +31,7 @@ class PostgresFSMStorage(BaseStorage):
         async with self._session_factory() as session:
             current_data = await self._get_data_raw(session, key)
             stmt = (
-                insert(BotFSMState)
+                upsert_insert(session, BotFSMState.__table__)
                 .values(
                     bot_id=key.bot_id,
                     chat_id=key.chat_id,
@@ -61,7 +61,7 @@ class PostgresFSMStorage(BaseStorage):
         async with self._session_factory() as session:
             current_state = await self._get_state_raw(session, key)
             stmt = (
-                insert(BotFSMState)
+                upsert_insert(session, BotFSMState.__table__)
                 .values(
                     bot_id=key.bot_id,
                     chat_id=key.chat_id,
@@ -88,7 +88,7 @@ class PostgresFSMStorage(BaseStorage):
             current_state = await self._get_state_raw(session, key)
             current.update(data)
             stmt = (
-                insert(BotFSMState)
+                upsert_insert(session, BotFSMState.__table__)
                 .values(
                     bot_id=key.bot_id,
                     chat_id=key.chat_id,
@@ -122,3 +122,7 @@ class PostgresFSMStorage(BaseStorage):
             BotFSMState.user_id == key.user_id,
         )
         return await session.scalar(query)
+
+
+# Backward-compatible alias.
+PostgresFSMStorage = DatabaseFSMStorage

@@ -1,4 +1,4 @@
 from bot.fsm.states import RegistrationStates
-from bot.fsm.storage import PostgresFSMStorage
+from bot.fsm.storage import DatabaseFSMStorage, PostgresFSMStorage
 
-__all__ = ['RegistrationStates', 'PostgresFSMStorage']
+__all__ = ["RegistrationStates", "DatabaseFSMStorage", "PostgresFSMStorage"]

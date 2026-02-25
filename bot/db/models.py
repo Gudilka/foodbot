@@ -4,8 +4,20 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, Numeric, SmallInteger, Text, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    SmallInteger,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -16,7 +28,7 @@ class Base(DeclarativeBase):
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     telegram_user_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
     username: Mapped[str | None] = mapped_column(Text)
     first_name: Mapped[str | None] = mapped_column(Text)
@@ -32,7 +44,7 @@ class User(Base):
 class UserProfile(Base):
     __tablename__ = "user_profiles"
 
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     currency: Mapped[str] = mapped_column(Text, nullable=False, default="RUB")
     household_size: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
     weekly_budget_rub: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
@@ -61,7 +73,7 @@ class UserDietaryRestriction(Base):
     __tablename__ = "user_dietary_restrictions"
     __table_args__ = (UniqueConstraint("user_id", "restriction_id"),)
 
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     restriction_id: Mapped[int] = mapped_column(
         SmallInteger, ForeignKey("dietary_restrictions.id", ondelete="RESTRICT"), primary_key=True
     )
@@ -81,7 +93,7 @@ class UserCuisinePreference(Base):
     __tablename__ = "user_cuisine_preferences"
     __table_args__ = (UniqueConstraint("user_id", "cuisine_id"),)
 
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     cuisine_id: Mapped[int] = mapped_column(SmallInteger, ForeignKey("cuisines.id", ondelete="CASCADE"), primary_key=True)
     priority: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
@@ -90,7 +102,7 @@ class UserCuisinePreference(Base):
 class UserNotificationSettings(Base):
     __tablename__ = "user_notification_settings"
 
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     telegram_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     push_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     email_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -103,22 +115,22 @@ class UserNotificationSettings(Base):
 class EventLog(Base):
     __tablename__ = "event_log"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id", ondelete="SET NULL"))
     event_name: Mapped[str] = mapped_column(Text, nullable=False)
     source: Mapped[str] = mapped_column(Text, nullable=False, default="system")
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class BotFSMState(Base):
     __tablename__ = "bot_fsm_states"
     __table_args__ = (UniqueConstraint("bot_id", "chat_id", "user_id"),)
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     bot_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     state: Mapped[str | None] = mapped_column(Text)
-    data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

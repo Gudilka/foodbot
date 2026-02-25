@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.db.dml import upsert_insert
 from bot.db.models import User
 
 
@@ -26,9 +25,9 @@ class UserRepository:
         first_name: str | None,
         last_name: str | None,
         language_code: str,
-    ) -> uuid.UUID:
+    ) -> str:
         stmt = (
-            insert(User)
+            upsert_insert(self._session, User.__table__)
             .values(
                 telegram_user_id=telegram_user_id,
                 username=username,
@@ -47,6 +46,9 @@ class UserRepository:
                     "last_seen_at": datetime.now(tz=timezone.utc),
                 },
             )
-            .returning(User.id)
         )
-        return await self._session.scalar(stmt)
+        await self._session.execute(stmt)
+        user = await self.get_by_telegram_user_id(telegram_user_id)
+        if user is None:
+            raise RuntimeError("Failed to upsert user")
+        return user.id

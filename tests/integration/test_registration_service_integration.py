@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import os
 import random
 from decimal import Decimal
 
 import pytest
 from sqlalchemy import text
 
+from bot.db.bootstrap import bootstrap_database
 from bot.db.session import build_engine, build_session_factory
 from bot.services.dto import RegistrationDraft
 from bot.services.registration_service import RegistrationService
@@ -16,12 +16,11 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest.fixture()
-async def session_factory():
-    db_url = os.getenv("TEST_DATABASE_URL")
-    if not db_url:
-        pytest.skip("TEST_DATABASE_URL is not set")
+async def session_factory(tmp_path):
+    db_url = f"sqlite+aiosqlite:///{tmp_path}/integration_foodbot.db"
     engine = build_engine(db_url)
     factory = build_session_factory(engine)
+    await bootstrap_database(engine, factory)
     yield factory
     await engine.dispose()
 

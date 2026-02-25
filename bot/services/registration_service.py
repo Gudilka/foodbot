@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -28,7 +27,7 @@ class RegistrationService:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
-    async def ensure_user(self, tg_user: TgUser) -> tuple[uuid.UUID, bool]:
+    async def ensure_user(self, tg_user: TgUser) -> tuple[str, bool]:
         async with self._session_factory() as session:
             user_repo = UserRepository(session)
             notif_repo = NotificationSettingsRepository(session)
@@ -50,7 +49,7 @@ class RegistrationService:
             await session.commit()
             return user_id, existing is None
 
-    async def save_profile(self, *, draft: RegistrationDraft, mode: str = "create") -> uuid.UUID:
+    async def save_profile(self, *, draft: RegistrationDraft, mode: str = "create") -> str:
         async with self._session_factory() as session:
             user_repo = UserRepository(session)
             profile_repo = ProfileRepository(session)

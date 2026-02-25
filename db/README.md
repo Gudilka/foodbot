@@ -1,5 +1,8 @@
 # Database Setup
 
+Runtime default in `v1` is SQLite (`sqlite+aiosqlite:///./foodbot.db`) with auto-bootstrap of required onboarding tables and reference dictionaries at app startup.
+This folder remains the PostgreSQL full-schema source of truth for extended domains.
+
 ## Files
 - `full_schema.sql`: full PostgreSQL schema for MVP + growth features.
 - `seed_reference_data.sql`: baseline reference data (restrictions, categories, tags, plans, templates, badges).

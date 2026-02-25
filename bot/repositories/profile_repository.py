@@ -1,23 +1,28 @@
 from __future__ import annotations
 
-import uuid
 from decimal import Decimal
 
 from sqlalchemy import delete, select, text
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from bot.db.dml import upsert_insert
 from bot.db.models import Cuisine, DietaryRestriction, UserCuisinePreference, UserDietaryRestriction, UserNotificationSettings, UserProfile
 from bot.services.dto import ProfileView, RegistrationDraft
+
+
+def _to_decimal(value: object | None) -> Decimal | None:
+    if value is None:
+        return None
+    return Decimal(str(value))
 
 
 class ProfileRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def upsert_profile(self, *, user_id: uuid.UUID, draft: RegistrationDraft) -> None:
+    async def upsert_profile(self, *, user_id: str, draft: RegistrationDraft) -> None:
         stmt = (
-            insert(UserProfile)
+            upsert_insert(self._session, UserProfile.__table__)
             .values(
                 user_id=user_id,
                 weekly_budget_rub=draft.weekly_budget_rub,
@@ -49,7 +54,7 @@ class ProfileRepository:
         )
         await self._session.execute(stmt)
 
-    async def replace_dietary_restrictions(self, *, user_id: uuid.UUID, codes: list[str]) -> None:
+    async def replace_dietary_restrictions(self, *, user_id: str, codes: list[str]) -> None:
         await self._session.execute(delete(UserDietaryRestriction).where(UserDietaryRestriction.user_id == user_id))
         if not codes:
             return
@@ -59,9 +64,9 @@ class ProfileRepository:
         code_to_id = {row.code: row.id for row in result}
         values = [{"user_id": user_id, "restriction_id": code_to_id[code]} for code in codes if code in code_to_id]
         if values:
-            await self._session.execute(insert(UserDietaryRestriction).values(values))
+            await self._session.execute(upsert_insert(self._session, UserDietaryRestriction.__table__).values(values))
 
-    async def replace_cuisines(self, *, user_id: uuid.UUID, codes: list[str]) -> None:
+    async def replace_cuisines(self, *, user_id: str, codes: list[str]) -> None:
         await self._session.execute(delete(UserCuisinePreference).where(UserCuisinePreference.user_id == user_id))
         if not codes:
             return
@@ -76,13 +81,13 @@ class ProfileRepository:
             values.append({"user_id": user_id, "cuisine_id": cuisine_id, "priority": priority})
             priority -= 1
         if values:
-            await self._session.execute(insert(UserCuisinePreference).values(values))
+            await self._session.execute(upsert_insert(self._session, UserCuisinePreference.__table__).values(values))
 
     async def upsert_notification_settings(
-        self, *, user_id: uuid.UUID, sunday_plan_reminder_enabled: bool, reminder_hour_local: int
+        self, *, user_id: str, sunday_plan_reminder_enabled: bool, reminder_hour_local: int
     ) -> None:
         stmt = (
-            insert(UserNotificationSettings)
+            upsert_insert(self._session, UserNotificationSettings.__table__)
             .values(
                 user_id=user_id,
                 sunday_plan_reminder_enabled=sunday_plan_reminder_enabled,
@@ -155,14 +160,14 @@ class ProfileRepository:
         )
         return ProfileView(
             telegram_user_id=base_row.telegram_user_id,
-            weekly_budget_rub=Decimal(base_row.weekly_budget_rub),
+            weekly_budget_rub=_to_decimal(base_row.weekly_budget_rub) or Decimal("0"),
             household_size=base_row.household_size,
             cooking_skill=base_row.cooking_skill,
             max_cook_time_min=base_row.max_cook_time_min,
-            goal_kcal=Decimal(base_row.goal_kcal) if base_row.goal_kcal is not None else None,
-            goal_protein_g=Decimal(base_row.goal_protein_g) if base_row.goal_protein_g is not None else None,
-            goal_fat_g=Decimal(base_row.goal_fat_g) if base_row.goal_fat_g is not None else None,
-            goal_carb_g=Decimal(base_row.goal_carb_g) if base_row.goal_carb_g is not None else None,
+            goal_kcal=_to_decimal(base_row.goal_kcal),
+            goal_protein_g=_to_decimal(base_row.goal_protein_g),
+            goal_fat_g=_to_decimal(base_row.goal_fat_g),
+            goal_carb_g=_to_decimal(base_row.goal_carb_g),
             exclude_fast_food=base_row.exclude_fast_food,
             notes=base_row.notes,
             dietary_restriction_codes=[r.code for r in restrictions.fetchall()],

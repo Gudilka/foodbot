@@ -9,9 +9,10 @@ from aiogram.enums import ParseMode
 from aiogram.types import BotCommand
 
 from bot.config import load_settings
+from bot.db.bootstrap import bootstrap_database
 from bot.db.health import db_health_check
 from bot.db.session import build_engine, build_session_factory
-from bot.fsm.storage import PostgresFSMStorage
+from bot.fsm.storage import DatabaseFSMStorage
 from bot.handlers import create_registration_router
 from bot.services import RegistrationService
 
@@ -22,7 +23,9 @@ async def run() -> None:
 
     engine = build_engine(settings.database_url)
     session_factory = build_session_factory(engine)
-    storage = PostgresFSMStorage(session_factory)
+    storage = DatabaseFSMStorage(session_factory)
+
+    await bootstrap_database(engine, session_factory)
 
     async with session_factory() as session:
         await db_health_check(session)
